@@ -304,7 +304,6 @@ int abs_pos(void) {
 
 int main (int argc, char *argv[]) {
   int condition = 0, color_idx, rc;
-  size_t bytes;
 
   // zlog specific variables
   const char *zlog_conf = "/etc/zlog.conf";

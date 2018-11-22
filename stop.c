@@ -7,27 +7,70 @@
 #include <ev3_port.h>
 #include <ev3_tacho.h>
 
-#define INIT_WAIT 500000
-#define TACHO_MOTORS 3
+#define MULTI_SET_TACHO_COMMAND_INX(sn,c) do {				\
+    _bytes = multi_set_tacho_command_inx((sn), (c));			\
+    if (_bytes == 0) {							\
+      zlog_error(zlog_c,						\
+		 "Impossible d'envoyer la commande '%d' aux servomoteurs", \
+		 (c));							\
+      ev3_uninit();							\
+      return 0;								\
+    }									\
+  } while(0);
 
-// Name the tacho motor
-#define TACHO_LEFT 0
-#define TACHO_RIGHT 1
-#define TACHO 2
+#define MULTI_SET_TACHO_DUTY_CYCLE_SP(sn,v) do {			\
+    _bytes = multi_set_tacho_duty_cycle_sp((sn), (v));			\
+    if (_bytes == 0) {							\
+      zlog_warn(zlog_c,							\
+		"Impossible de changer le rapport cyclique à '%d' pour le grand servomoteurs", \
+		(v));							\
+    }									\
+  } while(0);
 
-// Name the sockets according to the sensors name
-#define TACHO_LEFT_PORT OUTPUT_D
-#define TACHO_RIGHT_PORT OUTPUT_A
-#define TACHO_PORT OUTPUT_C
+#define MULTI_SET_TACHO_SPEED_SP(sn,v) do {				\
+    _bytes = multi_set_tacho_speed_sp((sn), (v));			\
+    if (_bytes == 0) {							\
+      zlog_warn(zlog_c,							\
+		"Impossible de changer la vitesse à '%d' pour les servomoteurs", \
+		(v));							\
+      ev3_uninit();							\
+      return 0;								\
+    }									\
+  } while(0);
+
+#define MULTI_SET_TACHO_STOP_ACTION_INX(sn,v) do {			\
+    _bytes = multi_set_tacho_stop_action_inx((sn), (v));		\
+    if (_bytes == 0) {							\
+      zlog_warn(zlog_c,							\
+		"Impossible d'assigner l'action '%d' aux servomoteurs",	\
+		(v));							\
+      ev3_uninit();							\
+      return 0;								\
+    }									\
+  } while(0);
+
+#define MIN(a,b) ((a) < (b) ? (a) : (b))
+
+// Numéro de séquence des servomoteurs
+#define TACHO_LEFT_SN tacho_sn[0]
+#define TACHO_RIGHT_SN tacho_sn[1]
+
+// Drapeau pour verifier la présence des capteurs
+#define HAVE_TACHO_LEFT 0b1
+#define HAVE_TACHO_RIGHT 0b10
+
+// Variable globale spécifique à zlog
+zlog_category_t *zlog_c;
+
+// Tableau pour les numéros de séquence des capteurs
+uint8_t tacho_sn[TACHO_DESC__LIMIT_];
+
+// Variable globale pour les macros
+size_t _bytes;
 
 /*
- * Array of sensor sequence numbers.
- */
-uint8_t tacho_sn[TACHO_MOTORS + 1];
-
-/*
- * Maximum speed for tacho motor. The maximum speed value gets assigned during
- * initialization. Default is 0.
+ * Vitesse maximale de servomoteurs. La vitesse maximale est assigné durant
+ * l'initialisation. La valeur standard est 0.
  */
 int max_spd = 0;
 
@@ -137,20 +180,40 @@ int init(void) {
 }
 
 int main (int argc, char *argv[]) {
-  int condition = 0, color_idx;
-  float color;
+  int condition = 0, color_idx, rc;
 
-  puts("Hello IIUN!");
+  // zlog specific variables
+  const char *zlog_conf = "/etc/zlog.conf";
+  const char *zlog_cat  = "project";
 
-  if(!init())
+  rc = zlog_init(zlog_conf);
+  if (rc) {
+    printf("zlog initialization using '%s' failed\n", zlog_conf);
     return EXIT_FAILURE;
+  }
 
-  puts("Arrêter les servomoteurs");
+  zlog_c = zlog_get_category(zlog_cat);
+  if (!zlog_c) {
+    printf("zlog unable to retrieve category '%s'\n", zlog_cat);
+    puts("zlog logging disabled");
+    zlog_fini();
+  }
+  
+  zlog_info(zlog_c, "Hello IIUN!");
+
+  if(!init()) {
+    zlog_fini();
+    return EXIT_FAILURE;
+  }
+
+  zlog_info(zlog_c, "Arrêter les servomoteurs");
   // A compléter
   
   ev3_uninit();
     
-  puts("Bye IIUN!");
+  zlog_info(zlog_c, "Bye IIUN!");
+
+  zlog_fini();
 
   return EXIT_SUCCESS;
 }
